@@ -131,58 +131,30 @@ func verifyCode(c AuthenticationContext) (interface{}, error) {
 
 // HandlerRegistrar an addon registrar
 type HandlerRegistrar interface {
-	Add(name string, route AuthenticationRouter)
-}
-
-// AuthenticationRouter defines an authentication router
-type AuthenticationRouter struct {
-	name   string
-	title  string
-	config map[string]interface{}
-	route  func(*gin.RouterGroup)
-}
-
-// Name name of auth route
-func (a *AuthenticationRouter) Name() string {
-	return a.name
-}
-
-// Title title of auth route
-func (a *AuthenticationRouter) Title() string {
-	return a.title
-}
-
-// Config config of auth route
-func (a *AuthenticationRouter) Config() map[string]interface{} {
-	return a.config
-}
-
-// Router actual router
-func (a *AuthenticationRouter) Router() func(*gin.RouterGroup) {
-	return a.route
+	Add(name string,
+		config map[string]interface{},
+		route func(*gin.RouterGroup)) error
 }
 
 // Register injects an addon into a registry
 func Register(ar HandlerRegistrar) {
-	ar.Add("gpa", AuthenticationRouter{
-		config: AddonConfig,
-		route: func(gr *gin.RouterGroup) {
-			gr.GET("gpa/send/:phone/:recaptcha", func(c *gin.Context) {
-				r, err := sendCode(c)
-				if err != nil {
-					c.AbortWithError(400, err)
-				} else {
-					c.JSON(200, r)
-				}
-			})
-			gr.GET("gpa/send/:phone/:recaptcha", func(c *gin.Context) {
-				r, err := verifyCode(c)
-				if err != nil {
-					c.AbortWithError(400, err)
-				} else {
-					c.JSON(200, r)
-				}
-			})
-		},
-	})
+	ar.Add("gpa", AddonConfig, func(gr *gin.RouterGroup) {
+		gr.GET("gpa/send/:phone/:recaptcha", func(c *gin.Context) {
+			r, err := sendCode(c)
+			if err != nil {
+				c.AbortWithError(400, err)
+			} else {
+				c.JSON(200, r)
+			}
+		})
+		gr.GET("gpa/send/:phone/:recaptcha", func(c *gin.Context) {
+			r, err := verifyCode(c)
+			if err != nil {
+				c.AbortWithError(400, err)
+			} else {
+				c.JSON(200, r)
+			}
+		})
+	},
+	)
 }
