@@ -139,7 +139,7 @@ type HandlerRegistrar interface {
 // Register injects an addon into a registry
 func Register(ar HandlerRegistrar) {
 	ar.Add("gpa", AddonConfig, func(gr *gin.RouterGroup) {
-		gr.GET("gpa/send/:phone/:recaptcha", func(c *gin.Context) {
+		gr.GET("send/:phone/:recaptcha", func(c *gin.Context) {
 			r, err := sendCode(c)
 			if err != nil {
 				c.AbortWithError(400, err)
@@ -147,7 +147,7 @@ func Register(ar HandlerRegistrar) {
 				c.JSON(200, r)
 			}
 		})
-		gr.GET("gpa/send/:phone/:recaptcha", func(c *gin.Context) {
+		gr.GET("send/:phone", func(c *gin.Context) {
 			r, err := verifyCode(c)
 			if err != nil {
 				c.AbortWithError(400, err)
