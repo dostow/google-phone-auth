@@ -26,6 +26,22 @@ var AddonConfig = map[string]interface{}{
 	"additionalProperties": false,
 }
 
+// AddonConfig defines configuration of this handler
+var AuthRequestConfig = map[string]interface{}{
+	"name":        "authrequest",
+	"title":       "Authentication Request",
+	"description": "Stores authentication request data",
+	"properties": map[string]interface{}{
+		"ip":          map[string]interface{}{"type": "string", "description": "ip of request"},
+		"sessionInfo": map[string]interface{}{"type": "string", "description": "ip of request"},
+		"phone":       map[string]interface{}{"type": "string", "description": "ip of request"},
+		"recaptcha":   map[string]interface{}{"type": "string", "description": "ip of request"},
+	},
+	"required":             []string{"ip", "sessionInfo", "phone", "recaptcha"},
+	"type":                 "object",
+	"additionalProperties": false,
+}
+
 // AuthenticationContext context
 type AuthenticationContext interface {
 	Get(key string) (value interface{}, exists bool)
@@ -69,24 +85,20 @@ func sendCode(c AuthenticationContext) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, err = store.Save("authRequest", map[string]interface{}{
-		"ip":        headers.Get("X-FORWARDED-FOR"),
-		"code":      response.SessionInfo,
-		"phone":     phone,
-		"recaptcha": recaptcha,
-		"status":    "pending",
+	var id string
+	id, err = store.Save("authRequest", map[string]interface{}{
+		"ip":          headers.Get("X-FORWARDED-FOR"),
+		"sessionInfo": response.SessionInfo,
+		"phone":       phone,
+		"recaptcha":   recaptcha,
+		"status":      "pending",
 	})
 	if err != nil {
 		logger.Warn("failed saving state", "err", err.Error())
 		return nil, err
 	}
-
-	// Check for errors (usually driver not valid)
-	if err != nil {
-		logger.Error("error %v", err)
-		return nil, err
-	}
-	return nil, fmt.Errorf("code not generated")
+	logger.Info("created authRequest", "id", id, "ip", "phone", phone)
+	return nil, err
 }
 
 func verifyCode(c AuthenticationContext) (interface{}, error) {
@@ -97,6 +109,7 @@ func verifyCode(c AuthenticationContext) (interface{}, error) {
 
 	secret := authConfig["secret"].(string)
 	phone := c.Param("phone")
+	code := c.Param("code")
 	identitytoolkitService, err := identitytoolkit.NewService(ctx, option.WithAPIKey(secret))
 	if err != nil {
 		logger.Warn(fmt.Sprintf("error %v", err))
@@ -111,14 +124,15 @@ func verifyCode(c AuthenticationContext) (interface{}, error) {
 	if err == nil {
 		phoneAuth := res[0]
 		id := phoneAuth["id"].(string)
-		code := phoneAuth["code"].(string)
+		// existingCode := phoneAuth["code"].(string)
 		sessionInfo := phoneAuth["sessionInfo"].(string)
 		req := identitytoolkitService.Relyingparty.VerifyPhoneNumber(&identitytoolkit.IdentitytoolkitRelyingpartyVerifyPhoneNumberRequest{
 			Code:        code,
 			SessionInfo: sessionInfo,
 		})
 		req.Context(ctx)
-		response, err := req.Do()
+		var response *identitytoolkit.IdentitytoolkitRelyingpartyVerifyPhoneNumberResponse
+		response, err = req.Do()
 		phoneAuth["verificationProof"] = response.VerificationProof
 		phoneAuth["status"] = "done"
 		if err == nil {
@@ -133,7 +147,9 @@ func verifyCode(c AuthenticationContext) (interface{}, error) {
 type HandlerRegistrar interface {
 	Add(name string,
 		config map[string]interface{},
-		route func(*gin.RouterGroup)) error
+		route func(*gin.RouterGroup),
+		schemas []map[string]interface{},
+	) error
 }
 
 // Register injects an addon into a registry
@@ -147,7 +163,7 @@ func Register(ar HandlerRegistrar) {
 				c.JSON(200, r)
 			}
 		})
-		gr.GET("send/:phone", func(c *gin.Context) {
+		gr.POST("send/:phone/:code", func(c *gin.Context) {
 			r, err := verifyCode(c)
 			if err != nil {
 				c.AbortWithError(400, err)
@@ -156,5 +172,6 @@ func Register(ar HandlerRegistrar) {
 			}
 		})
 	},
+		[]map[string]interface{}{AuthRequestConfig},
 	)
 }

@@ -17,7 +17,9 @@ func Test_sendCode(t *testing.T) {
 		want    interface{}
 		wantErr bool
 	}{
-		// TODO: Add test cases.
+		// {
+		// 	name: "test",args: args{AuthenticationContext{}},
+		// }
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
