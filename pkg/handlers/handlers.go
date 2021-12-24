@@ -163,7 +163,7 @@ func Register(ar HandlerRegistrar) {
 				c.JSON(200, r)
 			}
 		})
-		gr.POST("send/:phone/:code", func(c *gin.Context) {
+		gr.GET("verify/:phone/:code", func(c *gin.Context) {
 			r, err := verifyCode(c)
 			if err != nil {
 				c.AbortWithError(400, err)
