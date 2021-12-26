@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"regexp"
 
 	"github.com/gin-gonic/gin"
 	log "github.com/mgutz/logxi/v1"
@@ -52,21 +53,28 @@ type AuthenticationContext interface {
 // AuthenticationRouterFunction auth route function
 type AuthenticationRouterFunction func(AuthenticationContext) (interface{}, error)
 
-// AuthenticationStore describes a store
-type AuthenticationStore interface {
+// PluginDataStore describes a store
+type PluginDataStore interface {
 	Save(string, map[string]interface{}) (string, error)
 	Update(string, string, map[string]interface{}) error
 	Search(string, map[string]interface{}) ([]map[string]interface{}, error)
 }
 
+func onlyNumeric(v string) string {
+	reg, err := regexp.Compile("[^0-9]+")
+	if err != nil {
+		return v
+	}
+	return reg.ReplaceAllString(v, "")
+}
 func sendCode(c AuthenticationContext) (interface{}, error) {
 	var err error
-	phone := c.Param("phone")
+	phone := onlyNumeric(c.Param("phone"))
 	recaptcha := c.Param("recaptcha")
 
 	authConfig := c.MustGet("authConfig").(map[string]interface{})
 	headers := c.MustGet("headers").(http.Header)
-	store := c.MustGet("authStore").(AuthenticationStore)
+	store := c.MustGet("pluginDataStore").(PluginDataStore)
 	ctx := context.Background()
 
 	secret := authConfig["secret"].(string)
@@ -76,7 +84,7 @@ func sendCode(c AuthenticationContext) (interface{}, error) {
 	}
 
 	req := identitytoolkitService.Relyingparty.SendVerificationCode(&identitytoolkit.IdentitytoolkitRelyingpartySendVerificationCodeRequest{
-		PhoneNumber:    phone,
+		PhoneNumber:    "+" + phone,
 		RecaptchaToken: recaptcha,
 	})
 
@@ -86,13 +94,15 @@ func sendCode(c AuthenticationContext) (interface{}, error) {
 		return nil, err
 	}
 	var id string
-	id, err = store.Save("authRequest", map[string]interface{}{
+	var authRequest = map[string]interface{}{
 		"ip":          headers.Get("X-FORWARDED-FOR"),
 		"sessionInfo": response.SessionInfo,
 		"phone":       phone,
 		"recaptcha":   recaptcha,
 		"status":      "pending",
-	})
+	}
+	logger.Info("created auth request", "authRequest", authRequest)
+	id, err = store.Save("authRequest", authRequest)
 	if err != nil {
 		logger.Warn("failed saving state", "err", err.Error())
 		return nil, err
@@ -103,12 +113,12 @@ func sendCode(c AuthenticationContext) (interface{}, error) {
 
 func verifyCode(c AuthenticationContext) (interface{}, error) {
 	ctx := context.Background()
+	phone := onlyNumeric(c.Param("phone"))
 	authConfig := c.MustGet("authConfig").(map[string]interface{})
 	headers := c.MustGet("headers").(http.Header)
-	store := c.MustGet("authStore").(AuthenticationStore)
+	store := c.MustGet("pluginDataStore").(PluginDataStore)
 
 	secret := authConfig["secret"].(string)
-	phone := c.Param("phone")
 	code := c.Param("code")
 	identitytoolkitService, err := identitytoolkit.NewService(ctx, option.WithAPIKey(secret))
 	if err != nil {
@@ -122,6 +132,7 @@ func verifyCode(c AuthenticationContext) (interface{}, error) {
 		"status": "pending",
 	})
 	if err == nil {
+		logger.Info("found auth requests", "res", res)
 		phoneAuth := res[0]
 		id := phoneAuth["id"].(string)
 		// existingCode := phoneAuth["code"].(string)
@@ -135,8 +146,11 @@ func verifyCode(c AuthenticationContext) (interface{}, error) {
 		response, err = req.Do()
 		phoneAuth["verificationProof"] = response.VerificationProof
 		phoneAuth["status"] = "done"
+		phoneAuth["phone"] = phone
 		if err == nil {
-			err = store.Update("phoneauth", id, phoneAuth)
+			err = store.Update(id, "authRequest", phoneAuth)
+			// get or create a user with the phone number
+			return phoneAuth, err
 		}
 	}
 	logger.Warn("error retrieving social login state", "err", err)
@@ -158,7 +172,7 @@ func Register(ar HandlerRegistrar) {
 		gr.GET("send/:phone/:recaptcha", func(c *gin.Context) {
 			r, err := sendCode(c)
 			if err != nil {
-				c.AbortWithError(400, err)
+				c.AbortWithStatusJSON(400, map[string]interface{}{"err": err.Error()})
 			} else {
 				c.JSON(200, r)
 			}
@@ -166,9 +180,11 @@ func Register(ar HandlerRegistrar) {
 		gr.GET("verify/:phone/:code", func(c *gin.Context) {
 			r, err := verifyCode(c)
 			if err != nil {
-				c.AbortWithError(400, err)
+				c.AbortWithStatusJSON(400, map[string]interface{}{"err": err.Error()})
 			} else {
-				c.JSON(200, r)
+				c.Set("verified_phone", onlyNumeric(r.(map[string]interface{})["phone"].(string)))
+				signInByPhoneNumber := c.MustGet("signInByPhoneNumber").(func(*gin.Context))
+				signInByPhoneNumber(c)
 			}
 		})
 	},
