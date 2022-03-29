@@ -14,6 +14,24 @@ import (
 
 var logger = log.New("google-phone-auth")
 
+// TODO: These interfaces need to be moved to an auth plugin module
+// AuthenticationContext context
+type AuthenticationContext interface {
+	Get(key string) (value interface{}, exists bool)
+	MustGet(string) interface{}
+	Param(string) string
+}
+
+// AuthenticationRouterFunction auth route function
+type AuthenticationRouterFunction func(AuthenticationContext) (interface{}, error)
+
+// PluginDataStore describes a store
+type PluginDataStore interface {
+	Save(string, map[string]interface{}) (string, error)
+	Update(string, string, map[string]interface{}) error
+	Search(string, map[string]interface{}) ([]map[string]interface{}, error)
+}
+
 // AddonConfig defines configuration of this handler
 var AddonConfig = map[string]interface{}{
 	"name":        "gpa",
@@ -41,23 +59,6 @@ var AuthRequestConfig = map[string]interface{}{
 	"required":             []string{"ip", "sessionInfo", "phone", "recaptcha"},
 	"type":                 "object",
 	"additionalProperties": false,
-}
-
-// AuthenticationContext context
-type AuthenticationContext interface {
-	Get(key string) (value interface{}, exists bool)
-	MustGet(string) interface{}
-	Param(string) string
-}
-
-// AuthenticationRouterFunction auth route function
-type AuthenticationRouterFunction func(AuthenticationContext) (interface{}, error)
-
-// PluginDataStore describes a store
-type PluginDataStore interface {
-	Save(string, map[string]interface{}) (string, error)
-	Update(string, string, map[string]interface{}) error
-	Search(string, map[string]interface{}) ([]map[string]interface{}, error)
 }
 
 func onlyNumeric(v string) string {
@@ -95,7 +96,7 @@ func sendCode(c AuthenticationContext) (interface{}, error) {
 	}
 	var id string
 	var authRequest = map[string]interface{}{
-		"ip":          headers.Get("X-FORWARDED-FOR"),
+		"ip":          connectingIP(headers),
 		"sessionInfo": response.SessionInfo,
 		"phone":       phone,
 		"recaptcha":   recaptcha,
@@ -127,8 +128,8 @@ func verifyCode(c AuthenticationContext) (interface{}, error) {
 	}
 
 	res, err := store.Search("authRequest", map[string]interface{}{
+		"ip":     connectingIP(headers),
 		"phone":  phone,
-		"ip":     headers.Get("X-FORWARDED-FOR"),
 		"status": "pending",
 	})
 	if err == nil {
