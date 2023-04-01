@@ -1,4 +1,4 @@
-module github.com/dostow/phone-auth
+module github.com/dostow/google-phone-auth
 
 go 1.13
 
@@ -13,5 +13,3 @@ require (
 	github.com/osiloke/gostore v0.0.0-20200424173325-0e8f5ed32e6b
 	google.golang.org/api v0.29.0
 )
-
-replace git.progwebtech.com/code/worksmart => /Users/alt/work/dostow/worksmart
