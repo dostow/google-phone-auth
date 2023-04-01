@@ -145,13 +145,15 @@ func verifyCode(c AuthenticationContext) (interface{}, error) {
 		req.Context(ctx)
 		var response *identitytoolkit.IdentitytoolkitRelyingpartyVerifyPhoneNumberResponse
 		response, err = req.Do()
-		phoneAuth["verificationProof"] = response.VerificationProof
-		phoneAuth["status"] = "done"
-		phoneAuth["phone"] = phone
-		if err == nil {
-			err = store.Update(id, "authRequest", phoneAuth)
-			// get or create a user with the phone number
-			return phoneAuth, err
+		if response != nil {
+			phoneAuth["verificationProof"] = response.VerificationProof
+			phoneAuth["status"] = "done"
+			phoneAuth["phone"] = phone
+			if err == nil {
+				err = store.Update(id, "authRequest", phoneAuth)
+				// get or create a user with the phone number
+				return phoneAuth, err
+			}
 		}
 	}
 	logger.Warn("error retrieving social login state", "err", err)
