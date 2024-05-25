@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"regexp"
 
@@ -105,10 +104,8 @@ func sendCode(c AuthenticationContext) (interface{}, error) {
 	logger.Info("created auth request", "authRequest", authRequest)
 	id, err = store.Save("authRequest", authRequest)
 	if err != nil {
-		logger.Warn("failed saving state", "err", err.Error())
 		return nil, err
 	}
-	logger.Info("created authRequest", "id", id, "ip", "phone", phone)
 	return nil, err
 }
 
@@ -123,7 +120,6 @@ func verifyCode(c AuthenticationContext) (interface{}, error) {
 	code := c.Param("code")
 	identitytoolkitService, err := identitytoolkit.NewService(ctx, option.WithAPIKey(secret))
 	if err != nil {
-		logger.Warn(fmt.Sprintf("error %v", err))
 		return nil, err
 	}
 
@@ -156,7 +152,6 @@ func verifyCode(c AuthenticationContext) (interface{}, error) {
 			}
 		}
 	}
-	logger.Warn("error retrieving social login state", "err", err)
 	return nil, err
 }
 
@@ -186,8 +181,11 @@ func Register(ar HandlerRegistrar) {
 				c.AbortWithStatusJSON(400, map[string]interface{}{"err": err.Error()})
 			} else {
 				c.Set("verified_phone", onlyNumeric(r.(map[string]interface{})["phone"].(string)))
-				signInByPhoneNumber := c.MustGet("signInByPhoneNumber").(func(*gin.Context))
-				signInByPhoneNumber(c)
+				provider_id := r.(map[string]interface{})["phone"].(string)
+				c.Set("provider", "verified_phone")
+				c.Set("provider_id", provider_id)
+				signInWithProvider := c.MustGet("SignInWithProvider").(func(*gin.Context))
+				signInWithProvider(c)
 			}
 		})
 	},
