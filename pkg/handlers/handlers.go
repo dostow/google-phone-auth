@@ -93,7 +93,6 @@ func sendCode(c AuthenticationContext) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	var id string
 	var authRequest = map[string]interface{}{
 		"ip":          connectingIP(headers),
 		"sessionInfo": response.SessionInfo,
@@ -102,7 +101,7 @@ func sendCode(c AuthenticationContext) (interface{}, error) {
 		"status":      "pending",
 	}
 	logger.Info("created auth request", "authRequest", authRequest)
-	id, err = store.Save("authRequest", authRequest)
+	_, err = store.Save("authRequest", authRequest)
 	if err != nil {
 		return nil, err
 	}
