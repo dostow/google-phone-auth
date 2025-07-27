@@ -181,7 +181,7 @@ func Register(ar HandlerRegistrar) {
 				c.AbortWithStatusJSON(400, map[string]interface{}{"err": err.Error()})
 			} else {
 				c.Set("verified_phone", onlyNumeric(r.(map[string]interface{})["phone"].(string)))
-				provider_id := r.(map[string]interface{})["phone"].(string)
+				provider_id := r.(map[string]interface{})["provider_id"].(string)
 				c.Set("provider", "verified_phone")
 				c.Set("provider_id", provider_id)
 				signInWithProvider := c.MustGet("SignInWithProvider").(func(*gin.Context))
